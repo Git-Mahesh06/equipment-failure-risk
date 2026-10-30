@@ -1,0 +1,42 @@
+seed: 20261022
+
+generation:
+  mode: starter
+  plants: 1
+  lines: 2
+  machines: 10
+  sensors: 50
+  telemetry_days: 90
+  telemetry_interval_minutes: 30
+  target_failures: 5
+
+output:
+  directory: data/generated
+  ground_truth_directory: data/ground_truth
+  exceptions_directory: data/exceptions
+
+sensors:
+  temperature:
+    unit: degC
+    min_value: 0
+    max_value: 150
+    normal_min: 40
+    normal_max: 80
+  vibration:
+    unit: mm/s
+    min_value: 0
+    max_value: 50
+    normal_min: 0
+    normal_max: 8
+  pressure:
+    unit: kPa
+    min_value: 0
+    max_value: 1500
+    normal_min: 200
+    normal_max: 1000
+  current:
+    unit: A
+    min_value: 0
+    max_value: 500
+    normal_min: 5
+    normal_max: 150
