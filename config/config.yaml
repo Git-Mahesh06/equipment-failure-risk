@@ -8,7 +8,7 @@ generation:
   sensors: 50
   telemetry_days: 90
   telemetry_interval_minutes: 30
-  target_failures: 5
+  target_failures: 100
 
 output:
   directory: data/generated

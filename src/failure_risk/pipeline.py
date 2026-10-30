@@ -1,9 +1,10 @@
-
 from __future__ import annotations
 
 from pathlib import Path
 
 import pandas as pd
+
+from failure_risk.validation import validate_dataset
 
 from failure_risk.generators.master_data import generate_master_data
 from failure_risk.generators.failure_events import generate_failure_events
@@ -95,17 +96,20 @@ def write_dataset_telemetry(
 
     failures = data["failure_events"]
 
+
     earliest_failures = (
         failures.sort_values("failure_timestamp")
         .drop_duplicates(subset=["machine_id"], keep="first")
     )
 
-    failure_schedule = dict(
-        zip(
-            earliest_failures["machine_id"],
-            earliest_failures["failure_timestamp"],
-        )
-    )
+    failure_schedule = {
+        row["machine_id"]: {
+            "timestamp": row["failure_timestamp"],
+            "failure_type": row["failure_type"],
+        }
+        for _, row in earliest_failures.iterrows()
+    }
+
 
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)
 
@@ -121,12 +125,21 @@ def write_dataset_telemetry(
         precursor_hours=precursor_hours,
     )
 
+
 def export_dataset(
     data: dict[str, pd.DataFrame],
     output_dir: str = "data/raw",
     ground_truth_dir: str = "data/ground_truth",
 ) -> dict[str, str]:
-    """Export structured datasets to CSV, keeping failure labels separate."""
+    """Validate structured datasets before exporting CSV files."""
+
+    errors = validate_dataset(data)
+
+    if errors:
+        error_details = "\n".join(f"- {error}" for error in errors)
+        raise ValueError(
+            f"Dataset validation failed; no files were exported:\n{error_details}"
+        )
 
     raw_path = Path(output_dir)
     truth_path = Path(ground_truth_dir)
@@ -146,4 +159,3 @@ def export_dataset(
         exported_files[name] = str(destination)
 
     return exported_files
-
