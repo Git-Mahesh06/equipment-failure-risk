@@ -121,10 +121,21 @@ def iter_telemetry_chunks(
         freq=f"{interval_minutes}min",
     )
 
-    failures = {
-        machine_id: pd.Timestamp(failure_time)
-        for machine_id, failure_time in (failure_schedule or {}).items()
-    }
+    failures = {}
+    for machine_id, failure_info in (failure_schedule or {}).items():
+        if isinstance(failure_info, Mapping):
+            if "timestamp" not in failure_info:
+                raise ValueError(
+                f"Failure schedule for {machine_id} "
+                "must contain a timestamp."
+            )
+
+            failure_time = failure_info["timestamp"]
+        else:
+            # Maintain compatibility with the existing timestamp-only format.
+            failure_time = failure_info
+
+        failures[machine_id] = pd.Timestamp(failure_time)
 
     unknown_failure_machines = set(failures) - valid_machine_ids
     if unknown_failure_machines:
@@ -152,25 +163,51 @@ def iter_telemetry_chunks(
 
         values[~running] = 0.0
 
-        # Simulate a gradual precursor trend before a scheduled failure.
-        failure_time = failures.get(machine_id)
 
-        if failure_time is not None and precursor_hours > 0:
-            elapsed_to_failure = (
-                failure_time - timestamps
-            ).total_seconds() / 3600
+        # Simulate a failure-specific precursor trend.
+        failure_info = (failure_schedule or {}).get(machine_id)
 
-            precursor_mask = (
-                (elapsed_to_failure > 0)
-                & (elapsed_to_failure <= precursor_hours)
-                & running
+        if failure_info is not None and precursor_hours > 0:
+            if isinstance(failure_info, Mapping):
+                failure_time = pd.Timestamp(failure_info["timestamp"])
+                failure_type = failure_info.get("failure_type")
+            else:
+                # Backward compatibility with timestamp-only schedules.
+                failure_time = pd.Timestamp(failure_info)
+                failure_type = None
+
+            # Map failure types to the sensor types they affect.
+            affected_sensor_types = {
+                "OVERHEATING": {"TEMP"},
+                "EXCESSIVE_VIBRATION": {"VIBRATION"},
+                "PRESSURE_LOSS": {"PRESSURE"},
+                "ELECTRICAL_FAULT": {"CURRENT"},
+                "BEARING_WEAR": {"VIBRATION"},
+            }
+
+            affected_types = affected_sensor_types.get(
+                failure_type,
+                set(SENSOR_PROFILES) if failure_type is None else set(),
             )
 
-            progress = (
-                1 - elapsed_to_failure[precursor_mask] / precursor_hours
-            )
+            if sensor_type in affected_types:
+                elapsed_to_failure = (
+                    failure_time - timestamps
+                ).total_seconds() / 3600
 
-            values[precursor_mask] += profile["drift"] * progress
+                precursor_mask = (
+                    (elapsed_to_failure > 0)
+                    & (elapsed_to_failure <= precursor_hours)
+                    & running
+                )
+
+                progress = (
+                    1
+                    - elapsed_to_failure[precursor_mask] / precursor_hours
+                )
+
+                values[precursor_mask] += profile["drift"] * progress
+
 
         # Clip simulated readings to the instrument's physical limits.
         values = np.clip(

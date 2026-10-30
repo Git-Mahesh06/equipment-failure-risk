@@ -138,3 +138,54 @@ def test_failure_precursor_increases_temperature():
         near_failure["value"].mean()
         > before_precursor["value"].mean()
     )
+
+
+def test_overheating_affects_temperature_not_vibration():
+    sensors = pd.DataFrame([
+        {
+            "sensor_id": "TEMP-001",
+            "machine_id": "MACHINE-001",
+            "sensor_type": "TEMP",
+            "unit": "degC",
+        },
+        {
+            "sensor_id": "VIB-001",
+            "machine_id": "MACHINE-001",
+            "sensor_type": "VIBRATION",
+            "unit": "mm/s",
+        },
+    ])
+
+    machines = pd.DataFrame([
+        {"machine_id": "MACHINE-001"}
+    ])
+
+    chunks = list(iter_telemetry_chunks(
+        sensors,
+        machines,
+        start_time="2026-01-01T00:00:00",
+        days=2,
+        interval_minutes=60,
+        seed=12345,
+        failure_schedule={
+            "MACHINE-001": {
+                "timestamp": "2026-01-02T00:00:00",
+                "failure_type": "OVERHEATING",
+            }
+        },
+        precursor_hours=24,
+    ))
+
+    telemetry = pd.concat(chunks, ignore_index=True)
+
+    near_failure = telemetry[
+        (telemetry["timestamp"] >= pd.Timestamp("2026-01-01T18:00:00"))
+        & (telemetry["timestamp"] < pd.Timestamp("2026-01-02T00:00:00"))
+        & (telemetry["operating_state"] == "RUNNING")
+    ]
+
+    means = near_failure.groupby("sensor_id")["value"].mean()
+
+    assert means["TEMP-001"] > 65
+    assert means["VIB-001"] < 5
+
