@@ -51,7 +51,7 @@ def iter_telemetry_chunks(
     days: int = 90,
     interval_minutes: int = 30,
     seed: int = 20261022,
-    failure_schedule: Mapping[str, str | datetime] | None = None,
+    failure_schedule: Mapping[str, object] | None = None,
     precursor_hours: int = 24,
 ) -> Iterator[pd.DataFrame]:
     """Yield deterministic telemetry in one-sensor chunks.
@@ -121,25 +121,47 @@ def iter_telemetry_chunks(
         freq=f"{interval_minutes}min",
     )
 
+
     failures = {}
+
     for machine_id, failure_info in (failure_schedule or {}).items():
-        if isinstance(failure_info, Mapping):
-            if "timestamp" not in failure_info:
-                raise ValueError(
-                f"Failure schedule for {machine_id} "
-                "must contain a timestamp."
-            )
-
-            failure_time = failure_info["timestamp"]
+        if isinstance(failure_info, list):
+            event_infos = failure_info
         else:
-            # Maintain compatibility with the existing timestamp-only format.
-            failure_time = failure_info
+            event_infos = [failure_info]
 
-        failures[machine_id] = pd.Timestamp(failure_time)
+        events = []
+
+        for event_info in event_infos:
+            if isinstance(event_info, Mapping):
+                if "timestamp" not in event_info:
+                    raise ValueError(
+                        f"Failure schedule for {machine_id} "
+                        "must contain a timestamp."
+                    )
+
+                failure_time = pd.Timestamp(event_info["timestamp"])
+                failure_type = event_info.get("failure_type")
+            else:
+                failure_time = pd.Timestamp(event_info)
+                failure_type = None
+
+            if failure_time.tz is not None:
+                raise ValueError(
+                    "Use timezone-naive failure timestamps consistently."
+                )
+
+            events.append({
+                "timestamp": failure_time,
+                "failure_type": failure_type,
+            })
+
+        failures[machine_id] = events
 
     unknown_failure_machines = set(failures) - valid_machine_ids
     if unknown_failure_machines:
         raise ValueError("Failure schedule references an unknown machine.")
+
 
     for sensor_index, sensor in enumerate(
         sensors.sort_values("sensor_id").to_dict("records")
@@ -156,41 +178,47 @@ def iter_telemetry_chunks(
         running = ~timestamps.hour.isin([2, 3])
 
         values = rng.normal(
-            loc=profile["baseline"],
-            scale=profile["noise"],
-            size=total_readings_per_sensor,
+        loc=profile["baseline"],
+        scale=profile["noise"],
+        size=total_readings_per_sensor,
         )
 
+    # Zero readings are intentional during scheduled shutdown.
         values[~running] = 0.0
 
 
-        # Simulate a failure-specific precursor trend.
-        failure_info = (failure_schedule or {}).get(machine_id)
 
-        if failure_info is not None and precursor_hours > 0:
-            if isinstance(failure_info, Mapping):
-                failure_time = pd.Timestamp(failure_info["timestamp"])
-                failure_type = failure_info.get("failure_type")
-            else:
-                # Backward compatibility with timestamp-only schedules.
-                failure_time = pd.Timestamp(failure_info)
-                failure_type = None
+        # Simulate precursor trends for all relevant future failures.
+        failure_events = failures.get(machine_id, [])
 
-            # Map failure types to the sensor types they affect.
-            affected_sensor_types = {
-                "OVERHEATING": {"TEMP"},
-                "EXCESSIVE_VIBRATION": {"VIBRATION"},
-                "PRESSURE_LOSS": {"PRESSURE"},
-                "ELECTRICAL_FAULT": {"CURRENT"},
-                "BEARING_WEAR": {"VIBRATION"},
-            }
+        affected_sensor_types = {
+            "OVERHEATING": {"TEMP"},
+            "EXCESSIVE_VIBRATION": {"VIBRATION"},
+            "PRESSURE_LOSS": {"PRESSURE"},
+            "ELECTRICAL_FAULT": {"CURRENT"},
+            "BEARING_WEAR": {"VIBRATION"},
+        }
 
-            affected_types = affected_sensor_types.get(
-                failure_type,
-                set(SENSOR_PROFILES) if failure_type is None else set(),
+        if precursor_hours > 0 and failure_events:
+            strongest_progress = np.zeros(
+                total_readings_per_sensor,
+                dtype=float,
             )
 
-            if sensor_type in affected_types:
+            for event in failure_events:
+                failure_time = event["timestamp"]
+                failure_type = event["failure_type"]
+
+                affected_types = affected_sensor_types.get(
+                    failure_type,
+                    set(SENSOR_PROFILES)
+                    if failure_type is None
+                    else set(),
+                )
+
+                if sensor_type not in affected_types:
+                    continue
+
                 elapsed_to_failure = (
                     failure_time - timestamps
                 ).total_seconds() / 3600
@@ -201,15 +229,35 @@ def iter_telemetry_chunks(
                     & running
                 )
 
-                progress = (
-                    1
-                    - elapsed_to_failure[precursor_mask] / precursor_hours
+                progress = np.zeros(
+                    total_readings_per_sensor,
+                    dtype=float,
                 )
 
-                values[precursor_mask] += profile["drift"] * progress
+                progress[precursor_mask] = (
+                    1
+                    - elapsed_to_failure[precursor_mask]
+                    / precursor_hours
+                )
 
+                strongest_progress = np.maximum(
+                    strongest_progress,
+                    progress,
+                )
 
-        # Clip simulated readings to the instrument's physical limits.
+            precursor_mask = strongest_progress > 0
+
+            if sensor_type == "PRESSURE":
+                values[precursor_mask] -= (
+                    profile["drift"]
+                    * strongest_progress[precursor_mask]
+                )
+            else:
+                values[precursor_mask] += (
+                    profile["drift"]
+                    * strongest_progress[precursor_mask]
+                )
+
         values = np.clip(
             values,
             profile["minimum"],

@@ -2,253 +2,310 @@
 
 ## 1. Project Overview
 
-This project aims to build a reproducible, end-to-end data pipeline that uses synthetic industrial telemetry, operating context, and maintenance history to identify equipment at elevated risk of failure.
+The Equipment Failure Risk Prediction Pipeline is a reproducible Python data
+engineering project that generates synthetic industrial data, simulates sensor
+telemetry and failure precursors, validates data quality, calculates equipment
+failure-risk scores, and evaluates predictions against failure-event ground truth.
 
-The pipeline is designed to generate realistic manufacturing data, validate relationships between entities, identify data-quality issues, calculate failure-risk indicators, and produce machine-readable outputs for evaluation.
-
-The project is being developed as part of the YottaFlex AI candidate coding challenge.
+The project was developed as part of the YottaFlex AI candidate coding challenge.
 
 ## 2. Problem Statement
 
-Manufacturing equipment can develop warning signs before a failure occurs. These signs may include increasing temperature, abnormal vibration, changes in pressure or electrical current, and relevant maintenance history.
+Industrial equipment can exhibit warning signs before failure, including
+increasing temperature, abnormal vibration, pressure loss, and changes in
+electrical current.
 
-The objective is to build a data pipeline that:
+This project builds a pipeline to:
 
-- Generates interconnected industrial master and event data.
-- Simulates normal operation, shutdowns, sensor faults, and pre-failure patterns.
-- Preserves historical maintenance and failure records.
-- Validates primary keys, foreign keys, timestamps, ranges, and lifecycle rules.
-- Identifies elevated equipment failure risk using documented logic.
-- Separates ground-truth labels from prediction inputs.
-- Produces evaluation metrics, validation reports, and reproducible datasets.
+- Generate interconnected industrial master and operational datasets.
+- Simulate sensor telemetry, operating states, and failure-related patterns.
+- Maintain separate failure-event ground truth.
+- Validate entity relationships and data quality.
+- Identify elevated equipment risk using documented scoring rules.
+- Evaluate predictions against simulated failure events.
+- Export datasets and machine-readable reports.
+- Support reproducible generation through a configurable random seed.
 
-## 3. Current Implementation Status
+## 3. Implementation Status
 
-The project is being developed incrementally.
+The core pipeline and automated tests have been implemented.
 
-### Completed
+### Implemented
 
-- Python virtual environment setup.
-- Initial project directory structure.
-- Configuration file created.
-- Initial master-data generator implemented.
-- Generation of plants, production lines, machines, and sensors.
-- Deterministic ID generation for the starter configuration.
-- Basic primary-key and foreign-key validation.
-- Initial automated tests for entity counts, relationships, unique IDs, and reproducibility.
+- Configurable synthetic dataset generation.
+- Plants, production lines, machines, sensors, and related operational entities.
+- Deterministic data generation using a configurable random seed.
+- Primary-key, foreign-key, and dataset validation.
+- Streaming telemetry generation.
+- Simulated machine shutdowns and sensor-specific failure precursors.
+- Separate export of failure-event ground truth.
+- Telemetry validation and exception reporting.
+- Machine-level risk scoring.
+- Prediction evaluation with precision, recall, F1-score, accuracy, and confusion-matrix counts.
+- CSV and JSON output generation.
+- Automated tests for generation, validation, telemetry, risk scoring, and evaluation.
 
-### In Progress
+### Validation Evidence
 
-- Comprehensive data dictionary and relational schema.
-- Operating-shift and telemetry generation.
-- Maintenance work orders, technicians, parts, and failure events.
-- Pre-failure pattern injection and separate ground-truth labels.
-- Required anomaly and exception scenarios.
-- Risk scoring, evaluation metrics, and reconciliation reports.
-- Full-scale generation and reproducibility verification.
+The full automated test suite reported **103 passed in 1.96 seconds**.
 
-The status above will be updated as each component is implemented and tested.
+An earlier full pipeline execution generated:
+
+- 100 machines.
+- 500 sensors.
+- 150 failure events.
+- 2,160,000 telemetry readings.
+- Zero telemetry validation errors.
+- 864 telemetry warnings.
+
+The warnings were reported by the telemetry validation stage and should be reviewed as part of data-quality analysis.
+
+The evaluation figures recorded below are from an earlier execution and should not be assumed to represent a later regenerated dataset.
 
 ## 4. Technology Stack
 
 - **Python 3.12:** Pipeline implementation.
-- **pandas:** Structured data generation, transformation, and analysis.
+- **pandas:** Structured data processing and analysis.
 - **NumPy:** Numerical operations and synthetic signal generation.
+- **PyYAML:** Configuration loading.
 - **pytest:** Automated testing.
-- **PostgreSQL:** Planned relational persistence.
-- **CSV and JSON:** Portable dataset exports and machine-readable reports.
-- **Git and GitHub:** Version control and public source-code hosting.
+- **CSV:** Dataset and prediction exports.
+- **JSON:** Evaluation and machine-readable reports.
+- **Git and GitHub:** Version control and source-code hosting.
 
-## 5. Required Dataset Scale
+The current implementation uses CSV and JSON outputs. PostgreSQL is not required to run the documented pipeline.
 
-The planned full-scale dataset contains:
+## 5. Dataset Configuration
 
-| Entity or measurement   |      Target |
-| ----------------------- | ----------: |
-| Plants                  |           3 |
-| Production lines        |          12 |
-| Machines                |         100 |
-| Sensors                 |         500 |
-| Telemetry history       |     90 days |
-| Telemetry readings      | 1–3 million |
-| Labelled failure events |     100–200 |
+The full configuration in `config/config.yaml` specifies:
 
-The generator will use a fixed random seed, initially `20261022`, and support both a smaller development dataset and a full-scale dataset.
+| Setting               | Configured value |
+| --------------------- | ---------------: |
+| Plants                |                3 |
+| Production lines      |               12 |
+| Machines              |              100 |
+| Sensors               |              500 |
+| Telemetry history     |          90 days |
+| Telemetry interval    |       30 minutes |
+| Target failure events |              150 |
+| Random seed           |       `20261022` |
 
-These are target volumes, not a claim that the full dataset has already been generated.
+With 500 sensors, 90 days, and a 30-minute interval, the expected telemetry count is:
+
+500 sensors × 90 days × 48 readings per day = 2,160,000 readings.
+
+Actual output counts should be checked against the generated files and pipeline logs.
 
 ## 6. Core Data Entities
 
-The planned data model includes:
+The project generates data for:
 
-1. `Plant`
-2. `ProductionLine`
-3. `Machine`
-4. `Sensor`
-5. `TelemetryEvent`
-6. `OperatingShift`
-7. `MaintenanceWorkOrder`
-8. `FailureEvent`
-9. `Part`
-10. `Technician`
+1. Plants
+2. Production lines
+3. Machines
+4. Sensors
+5. Telemetry readings
+6. Failure events
+7. Maintenance work orders
+8. Technicians
+9. Operating shifts
+10. Parts and parts usage
 
-Primary keys and foreign keys will be used to maintain referential integrity. Bridge tables will represent many-to-many relationships where required.
+Dataset relationships and field definitions are documented in `docs/data_dictionary.md`.
+Business and simulation assumptions are documented in `docs/business_rules.md`.
 
-Entity definitions, field types, units, allowed values, uniqueness rules, and validation requirements will be documented in `docs/data_dictionary.md`.
+Failure events are retained separately as ground truth rather than included as
+ordinary telemetry prediction features.
 
 ## 7. Pipeline Workflow
 
-The planned processing workflow is:
+The pipeline follows this general workflow:
 
-1. Load the generation configuration.
-2. Generate parent/master entities.
-3. Generate dependent operational and maintenance records.
-4. Generate timestamped telemetry using machine and sensor context.
-5. Inject documented sensor anomalies and pre-failure patterns.
-6. Generate ground-truth labels separately from prediction features.
-7. Validate schema, identifiers, relationships, timestamps, and business rules.
-8. Calculate features and equipment failure-risk scores.
-9. Evaluate predictions against ground truth.
-10. Export datasets, exception records, validation summaries, and evaluation reports.
-11. Repeat generation with the same seed and compare results for reproducibility.
+1. Load configuration.
+2. Generate master and operational datasets.
+3. Validate dataset structure and relationships.
+4. Export structured datasets, keeping failure-event ground truth separate.
+5. Generate timestamped sensor telemetry.
+6. Validate telemetry and report data-quality exceptions.
+7. Calculate machine-level risk predictions.
+8. Compare predictions against future failure events.
+9. Export risk predictions and evaluation metrics.
 
-## 8. Required Exception Scenarios
+The implementation is organized into modules for data generation, validation,
+telemetry, risk scoring, evaluation, and command-line execution.
 
-The pipeline is intended to explicitly detect and report:
+## 8. Data Quality and Exception Handling
 
-- Telemetry referencing an unknown sensor.
-- Impossible sensor units or measurement ranges.
-- Failure timestamps that violate documented symptom-ordering rules.
-- Maintenance end timestamps earlier than start timestamps.
-- Missing telemetry intervals incorrectly represented as zero-valued measurements.
+The pipeline includes validation for data structure and relationships, as well
+as telemetry-specific checks.
 
-Exception records will identify the affected record, issue type, expected behavior, and observed behavior wherever applicable.
+The telemetry generator enforces rules such as:
 
-Sensor faults will be distinguished from actual machine failures.
+- Sensor identifiers must be unique and non-null.
+- Machine identifiers must be unique and non-null.
+- Sensors must reference valid machines.
+- Sensor types and units must be supported.
+- The telemetry interval must be positive and divide evenly into one day.
+- Generated values are clipped to their sensor profile's physical bounds.
+- Scheduled shutdowns are represented explicitly through operating state and
+  quality status.
 
-## 9. Validation and Evaluation
+Telemetry validation can report errors and warnings. A successful generation
+run does not mean that every generated record is warning-free.
 
-Planned data-quality checks include:
+See `docs/business_rules.md` for the documented simulation rules and limitations.
 
-- Primary-key uniqueness.
-- Foreign-key integrity.
-- Allowed enumeration values.
-- Sensor units and measurement ranges.
-- Timestamp and lifecycle consistency.
-- Duplicate event detection.
-- Derived-value and maintenance reconciliation.
-- Detection of missing telemetry and explicit anomaly records.
-- Reproducibility using fixed-seed generation.
+## 9. Risk Scoring and Evaluation
 
-Planned failure-risk evaluation metrics include precision, recall, F1 score, PR-AUC where appropriate, false alarms per machine-day, and failure-warning lead time.
+The risk-scoring module uses sensor-specific thresholds to calculate risk scores
+between 0 and 100. The current scoring logic assigns higher risk to elevated
+temperature, vibration, and current readings, and to low pressure readings.
 
-Evaluation will use prediction-time information and separate ground-truth labels to avoid target leakage.
+Predictions are evaluated against failure events occurring strictly after the
+prediction timestamp and within the configured prediction horizon.
 
-## 10. Installation and Setup
+### Latest Full-Scale Execution
 
-Prerequisites:
+The latest full-scale pipeline execution completed successfully using the configured random seed `20261022`.
 
-- Python 3.12 or a compatible Python version.
-- Git.
-- A terminal such as PowerShell or the VS Code integrated terminal.
+| Metric                        |    Result |
+| ----------------------------- | --------: |
+| Machines                      |       100 |
+| Sensors                       |       500 |
+| Failure events                |       150 |
+| Telemetry readings            | 2,160,000 |
+| Evaluation samples            |     8,300 |
+| Precision                     |    0.9000 |
+| Recall                        |    0.0098 |
+| F1-score                      |    0.0194 |
+| Accuracy                      |    0.8902 |
+| Telemetry validation errors   |         0 |
+| Telemetry validation warnings |     1,587 |
 
-Clone the public repository:
+The automated test suite passed with **103 tests**.
 
-```bash
-git clone <YOUR_PUBLIC_GITHUB_REPOSITORY_URL>
-cd equipment-failure-risk
-```
+The evaluation results show high precision but very low recall. The current risk-scoring approach misses most failure-positive cases, so its predictive performance requires further improvement before real-world use. Accuracy should not be interpreted in isolation.
 
-Create and activate a virtual environment on Windows PowerShell:
+The telemetry validation stage reported 1,587 warnings and zero errors. The warnings should be investigated and explained in the data-quality documentation.
+
+These results are from the latest recorded full-scale execution; future code or configuration changes may alter them.
+
+**Important:** These are historical evaluation figures. Rerun the evaluation
+after any changes to telemetry generation or risk scoring before describing
+them as final results.
+
+## 10. Running the Project
+
+Run the following commands from the repository root in an activated Python
+virtual environment.
+
+### Install dependencies
 
 ```powershell
-py -3.12 -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-pip install -r requirements.txt
+python -m pip install -e .
 ```
 
-Run the automated tests:
+If development dependencies are managed separately in your environment,
+install the appropriate test dependencies as well.
+
+### Run the full pipeline
 
 ```powershell
-python -m pytest tests/ -v
+python -m failure_risk.cli --config config/config.yaml
 ```
 
-The complete pipeline execution command will be documented here once the CLI is implemented.
+The pipeline reads the configuration, generates datasets and telemetry,
+performs validation, creates risk predictions, and writes evaluation outputs.
 
-## 11. Configuration
+### Run the automated tests
 
-The pipeline configuration is maintained in `config/config.yaml`.
+```powershell
+python -m pytest -q
+```
 
-It will control the random seed, entity counts, telemetry time range, sampling interval, output directories, and sensor specifications.
+The latest recorded full test run reported 103 passing tests. Run the command
+again on the final code revision to verify the submitted version.
 
-The starter configuration is intended for rapid development and testing. The full configuration will use the required challenge volumes.
+## 11. Output Files
+
+The configured output locations include:
+
+- `data/generated/` — generated structured datasets.
+- `data/ground_truth/` — failure-event ground truth.
+- `data/exceptions/` — data-quality exception outputs.
+- `data/reports/risk_predictions.csv` — machine risk predictions.
+- `data/reports/risk_evaluation.json` — prediction evaluation metrics.
+
+The exact output files depend on the configured pipeline and the outputs produced
+by the current code. Inspect the generated directories after execution.
+
+Generated data and reports may be excluded from version control according to
+the repository's `.gitignore` rules.
 
 ## 12. Reproducibility
 
-Reproducibility is a key acceptance criterion.
+A configurable random seed is used to support repeatable synthetic data
+generation.
 
-The project will:
+Automated tests cover reproducibility and selected data-integrity rules.
+Reproducibility should be verified by comparing outputs generated using the
+same configuration and seed.
 
-- Use a fixed random seed.
-- Generate stable, deterministic identifiers.
-- Derive calculated values from source records.
-- Use stable output ordering and serialization where appropriate.
-- Compare row counts and file checksums across repeated runs.
-- Record configuration and validation results.
+Changes to the generator, configuration, or scoring logic may change the
+generated outputs and evaluation results.
 
-The reproducibility report will be added after the full pipeline is implemented.
+## 13. Assumptions and Limitations
 
-## 13. Testing Strategy
+- The dataset is synthetic and does not represent measured industrial equipment.
+- Sensor thresholds and precursor patterns are simulation assumptions.
+- The risk-scoring rules are not a trained or production-validated predictive model.
+- Synthetic performance does not establish real-world failure prediction accuracy.
+- The earlier evaluation showed very low recall and a substantial number of missed
+  positive cases.
+- The pipeline should not be used alone to make safety-critical maintenance
+  decisions.
+- Further calibration, feature engineering, validation against real operational
+  data, and evaluation across different conditions would be required for
+  production use.
 
-Automated tests will cover:
+## 14. AI-Assisted Development Disclosure
 
-- Master-data generation and expected counts.
-- Primary-key uniqueness and foreign-key relationships.
-- Valid and invalid sensor definitions.
-- Telemetry generation and operating-state consistency.
-- Maintenance and failure-event lifecycle rules.
-- Exception detection.
-- Risk-scoring logic.
-- Evaluation metrics and label separation.
-- Same-seed reproducibility.
+LLM tools assisted with project planning, implementation guidance, debugging,
+test design, and documentation.
 
-Both normal cases and deliberately injected negative scenarios will be tested.
+The developer remains responsible for reviewing changes, executing the code,
+checking test results, and validating the final submission.
 
-## 14. Assumptions and Limitations
+The assistance summary and limitations are documented in `docs/ai_usage.md`.
+A summary of development prompts and outcomes is maintained in
+`prompts/prompt_history.md`.
 
-- The initial dataset is synthetic and is not intended to represent any particular real manufacturing plant.
-- Simulated failure patterns and risk rules must be documented and evaluated against the corresponding ground truth.
-- Performance on synthetic data does not establish real-world predictive accuracy.
-- Risk scores are decision-support outputs and do not independently establish that equipment will fail.
-- Full-scale generation and evaluation results will be reported only after they have been executed and verified.
+## 15. Repository Structure
 
-## 15. AI-Assisted Development Disclosure
+```text
+equipment-failure-risk/
+├── config/
+│   └── config.yaml
+├── docs/
+│   ├── ai_usage.md
+│   ├── business_rules.md
+│   └── data_dictionary.md
+├── prompts/
+│   └── prompt_history.md
+├── scripts/
+├── src/
+│   └── failure_risk/
+├── tests/
+├── README.md
+└── pyproject.toml
+```
 
-LLM tools are being used to assist with project planning, implementation guidance, code review, testing ideas, and documentation.
+This is a high-level overview; consult the repository for the complete module
+and test structure.
 
-The developer is responsible for reviewing generated code, understanding the implementation, running the tests, checking the business rules, and validating the final outputs.
+## 16. Submission Status
 
-The prompt history and a record of AI assistance, code changes, personal review, and validation will be maintained in `prompts/prompt_history.md` and `docs/ai_usage.md`.
+The core implementation and automated tests have been completed, with 103 tests
+passing in the last recorded full-suite run.
 
-## 16. Project Documentation
-
-- `docs/data_dictionary.md` — Entity definitions and field-level validation rules.
-- `docs/business_rules.md` — Business logic, failure patterns, and lifecycle rules.
-- `prompts/prompt_history.md` — LLM prompt history.
-- `docs/ai_usage.md` — AI assistance and developer validation.
-- `config/config.yaml` — Dataset generation configuration.
-
-## 17. License and Data Provenance
-
-The project is intended to use synthetic data generated by its own code. No confidential or personal industrial data is required.
-
-Any future external reference datasets will be documented with their source, version, retrieval date, license, attribution requirements, and transformations before use.
-
-## 18. Author and Submission
-
-Developed for the YottaFlex AI candidate coding challenge.
-
-**Repository:** Add the public GitHub repository URL before submission.
-
-**Submission status:** In development. Final functionality, full-scale validation, and evaluation results will be documented after execution.
+**Submission status:** Core functionality and automated tests have been implemented. The latest full test suite passed with 103 tests. Full-scale pipeline execution and final evaluation metrics must be verified against the latest code revision before submission.

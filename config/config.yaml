@@ -1,14 +1,14 @@
 seed: 20261022
 
 generation:
-  mode: starter
-  plants: 1
-  lines: 2
-  machines: 10
-  sensors: 50
+  mode: full
+  plants: 3
+  lines: 12
+  machines: 100
+  sensors: 500
   telemetry_days: 90
   telemetry_interval_minutes: 30
-  target_failures: 100
+  target_failures: 150
 
 output:
   directory: data/generated

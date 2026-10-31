@@ -94,21 +94,25 @@ def write_dataset_telemetry(
 ) -> int:
     """Stream telemetry linked to the earliest failure per machine."""
 
+
     failures = data["failure_events"]
 
-
-    earliest_failures = (
-        failures.sort_values("failure_timestamp")
-        .drop_duplicates(subset=["machine_id"], keep="first")
+    # Keep every failure event for each machine, in timestamp order.
+    ordered_failures = failures.sort_values(
+        ["failure_timestamp", "failure_id"]
     )
 
-    failure_schedule = {
-        row["machine_id"]: {
-            "timestamp": row["failure_timestamp"],
-            "failure_type": row["failure_type"],
-        }
-        for _, row in earliest_failures.iterrows()
-    }
+    failure_schedule = {}
+    for machine_id, machine_failures in ordered_failures.groupby(
+        "machine_id", sort=False
+    ):
+        failure_schedule[machine_id] = [
+            {
+                "timestamp": row["failure_timestamp"],
+                "failure_type": row["failure_type"],
+            }
+            for _, row in machine_failures.iterrows()
+        ]
 
 
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)

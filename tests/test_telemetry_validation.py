@@ -81,3 +81,135 @@ def test_exception_report_is_written(tmp_path):
 
     assert len(report) == 1
     assert report.loc[0, "exception_type"] == "INVALID_READING"
+def test_unknown_sensor_is_detected():
+    telemetry = sample_telemetry()
+    sensors = pd.DataFrame({
+        "sensor_id": ["S002"],
+        "machine_id": ["M001"],
+    })
+
+    exceptions = validate_telemetry(
+        telemetry,
+        sensors=sensors,
+    )
+
+    assert any(
+        item["exception_type"] == "UNKNOWN_SENSOR"
+        for item in exceptions
+    )
+
+
+def test_sensor_machine_mismatch_is_detected():
+    telemetry = sample_telemetry()
+    sensors = pd.DataFrame({
+        "sensor_id": ["S001"],
+        "machine_id": ["M002"],
+    })
+
+    exceptions = validate_telemetry(
+        telemetry,
+        sensors=sensors,
+    )
+
+    assert any(
+        item["exception_type"] == "SENSOR_MACHINE_MISMATCH"
+        for item in exceptions
+    )
+def test_reading_outside_physical_range_is_detected():
+    telemetry = sample_telemetry()
+    telemetry.loc[0, "value"] = 175.0
+
+    sensors = pd.DataFrame({
+        "sensor_id": ["S001"],
+        "machine_id": ["M001"],
+        "sensor_type": ["TEMP"],
+    })
+
+    sensor_ranges = {
+        "TEMP": {
+            "min_value": 0,
+            "max_value": 150,
+            "normal_min": 40,
+            "normal_max": 80,
+        }
+    }
+
+    exceptions = validate_telemetry(
+        telemetry,
+        sensors=sensors,
+        sensor_ranges=sensor_ranges,
+    )
+
+    assert any(
+        item["exception_type"] == "OUT_OF_RANGE"
+        for item in exceptions
+    )
+
+
+def test_reading_outside_normal_range_is_warning():
+    telemetry = sample_telemetry()
+    telemetry.loc[0, "value"] = 120.0
+
+    sensors = pd.DataFrame({
+        "sensor_id": ["S001"],
+        "machine_id": ["M001"],
+        "sensor_type": ["TEMP"],
+    })
+
+    sensor_ranges = {
+        "TEMP": {
+            "min_value": 0,
+            "max_value": 150,
+            "normal_min": 40,
+            "normal_max": 80,
+        }
+    }
+
+    exceptions = validate_telemetry(
+        telemetry,
+        sensors=sensors,
+        sensor_ranges=sensor_ranges,
+    )
+
+    abnormal = [
+        item for item in exceptions
+        if item["exception_type"] == "ABNORMAL_READING"
+    ]
+
+    assert abnormal
+    assert abnormal[0]["severity"] == "WARNING"
+
+
+def test_reading_inside_normal_range_has_no_range_exception():
+    telemetry = sample_telemetry()
+
+    sensors = pd.DataFrame({
+        "sensor_id": ["S001"],
+        "machine_id": ["M001"],
+        "sensor_type": ["TEMP"],
+    })
+
+    sensor_ranges = {
+        "TEMP": {
+            "min_value": 0,
+            "max_value": 150,
+            "normal_min": 40,
+            "normal_max": 80,
+        }
+    }
+
+    exceptions = validate_telemetry(
+        telemetry,
+        sensors=sensors,
+        sensor_ranges=sensor_ranges,
+    )
+
+    range_exceptions = {
+        "OUT_OF_RANGE",
+        "ABNORMAL_READING",
+    }
+
+    assert not any(
+        item["exception_type"] in range_exceptions
+        for item in exceptions
+    )

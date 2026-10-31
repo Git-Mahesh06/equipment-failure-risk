@@ -1,15 +1,12 @@
 
 from unittest.mock import patch
-
-from failure_risk import pipeline
-
 from pathlib import Path
 
 import pandas as pd
-
-from failure_risk.pipeline import generate_dataset, export_dataset
-
 import pytest
+
+from failure_risk import pipeline
+from failure_risk.pipeline import generate_dataset, export_dataset
 
 
 def test_generate_dataset_contains_expected_tables():
@@ -109,8 +106,15 @@ def test_write_dataset_telemetry_passes_failure_type(tmp_path):
     machine_id = failure["machine_id"]
 
     assert machine_id in schedule
-    assert schedule[machine_id]["timestamp"] == failure["failure_timestamp"]
-    assert schedule[machine_id]["failure_type"] == failure["failure_type"]
+
+    machine_events = schedule[machine_id]
+
+    assert any(
+        event["timestamp"] == failure["failure_timestamp"]
+        and event["failure_type"] == failure["failure_type"]
+        for event in machine_events
+    )
+
 
 def test_export_dataset_rejects_invalid_data(tmp_path):
     data = generate_dataset(days=1, seed=12345)
